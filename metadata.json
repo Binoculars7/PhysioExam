@@ -1,0 +1,5 @@
+{
+  "name": "PhysioExam",
+  "description": "A study aid application for Physiology exams, providing AI-generated answers to standard problem sets.",
+  "requestFramePermissions": []
+}
