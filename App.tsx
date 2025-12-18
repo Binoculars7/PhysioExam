@@ -1,18 +1,28 @@
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import SectionView from './components/SectionView';
 import { SECTIONS } from './data';
 import { Menu } from './components/Icons';
 import { AnswerState } from './types';
 
+const CACHE_KEY = 'physio_exam_answers_v1';
+
 const App: React.FC = () => {
   const [selectedSectionId, setSelectedSectionId] = useState<string>(SECTIONS[0].id);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // Global state to store answers for all questions
-  const [answers, setAnswers] = useState<AnswerState>({});
+  // Initialize state from LocalStorage or empty object
+  const [answers, setAnswers] = useState<AnswerState>(() => {
+    const cached = localStorage.getItem(CACHE_KEY);
+    return cached ? JSON.parse(cached) : {};
+  });
+
+  // Persist answers to LocalStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(answers));
+  }, [answers]);
 
   const selectedSection = SECTIONS.find(s => s.id === selectedSectionId) || SECTIONS[0];
 
@@ -26,6 +36,13 @@ const App: React.FC = () => {
     }));
   };
 
+  const clearCache = () => {
+    if (window.confirm("Are you sure you want to clear all saved answers?")) {
+      setAnswers({});
+      localStorage.removeItem(CACHE_KEY);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar 
@@ -34,6 +51,7 @@ const App: React.FC = () => {
         onSelectSection={setSelectedSectionId}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        onClearCache={clearCache}
       />
 
       <main className="flex-1 flex flex-col h-full relative">

@@ -1,57 +1,69 @@
+
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+/**
+ * Service for interacting with Google GenAI Gemini models.
+ * Optimized for high-yield, concise physiology study guides.
+ */
+
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function generateAnswer(question: string): Promise<string> {
-  if (!process.env.API_KEY) {
-    throw new Error("API Key not found. Please check your configuration.");
-  }
+  // Create a new GoogleGenAI instance right before making an API call 
+  // to ensure it always uses the most up-to-date API key from the environment.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  let attempt = 0;
+  const maxRetries = 3;
+  let delay = 2000;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `You are an expert physiology tutor creating a comprehensive study guide.
-      The user provides a complex question that often contains multiple distinct tasks (e.g., "Name X", "Describe Y", "Define Z").
+  while (attempt <= maxRetries) {
+    try {
+      // Using gemini-3-flash-preview for medical Q&A tasks as recommended
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `You are a world-class Physiology Professor known for "High-Yield" exam prep. 
+        Your task is to provide a punchy, ultra-concise, and highly structured study guide for: "${question}"
+        
+        CRITICAL RULES:
+        - NO FLUFF: Get straight to the point. 
+        - HIGH YIELD: Focus only on the most important mechanisms, definitions, and values.
+        - TONE: Professional but energetic and direct.
+        - STRUCTURE: Use short bullet points rather than long paragraphs.
+        
+        Formatting:
+        - Use **BOLD HEADERS** for distinct parts of the question.
+        - Use • bullet points for all lists.
+        - **Bold** every key term or medical value (e.g., **70 mL**, **Action Potential**).
+        - Ensure every sub-part of the user's prompt is answered, but keep each answer to 2-3 sentences max.`,
+        config: {
+          temperature: 0.2, // Lower temperature for more focused, factual answers
+        }
+      });
+
+      // Access the .text property directly (not a method) to get the generated content
+      const text = response.text;
+      if (!text) throw new Error("Empty response");
+      return text;
+
+    } catch (error: any) {
+      // Implement robust handling for API errors and rate limits
+      const isRateLimit = error?.message?.includes('429') || error?.status === 429;
       
-      **CRITICAL INSTRUCTION**: You MUST answer EVERY single part of the question. Do not skip any definition, mechanism, or list requested. If the answer is long, that is okay, but keep the individual explanations concise.
-
-      **Formatting Rules:**
-      1. **Numbered Sections**: Break the answer into numbered bold headers corresponding to the parts of the question (e.g., **1. External Manifestations**, **2. Cardiac Valves**, **3. Heart Wall Layers**).
-      2. **Bullet Points**: Use bullet points for all lists.
-      3. **Key Terms**: Always **Bold** the key term at the start of a definition (e.g., * **Term**: Definition).
-      4. **Completeness**: Check the question again. Did you define *every* term requested? Did you explain *every* mechanism asked?
-
-      **Example Output Format:**
-      
-      **1. External Manifestations of Cardiac Activity**
-      * **Heart Sounds**: Audible sounds produced by valve closure.
-      * **Pulse**: Rhythmic throbbing of arteries.
-      * **Apex Beat**: Impulse felt on the chest wall.
-
-      **2. Cardiac Valves**
-      * **Atrioventricular Valves**: Mitral and Tricuspid valves preventing backflow to atria.
-      * **Semilunar Valves**: Aortic and Pulmonary valves preventing backflow to ventricles.
-
-      **3. Heart Wall Layers**
-      * **Epicardium**: Outer serous membrane.
-      * **Myocardium**: Thick middle muscular layer.
-      * **Endocardium**: Inner endothelial lining.
-      * **Pericardium**: Fibrous sac surrounding the heart.
-
-      Question: ${question}`,
-      config: {
-        maxOutputTokens: 4000, // Increased significantly to prevent cut-off text
-        temperature: 0.3, 
+      if (isRateLimit && attempt < maxRetries) {
+        console.warn(`Rate limit hit. Retrying in ${delay}ms...`);
+        await wait(delay);
+        attempt++;
+        delay *= 2; // Exponential backoff for retries
+        continue;
       }
-    });
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("No response text generated.");
+      
+      console.error("Gemini API Error:", error);
+      if (isRateLimit) {
+        throw new Error("API Limit reached. Please wait a few seconds before trying again.");
+      }
+      throw new Error("Failed to generate answer. Check your internet connection.");
     }
-    return text;
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw new Error("Failed to generate answer. Please try again later.");
   }
+  throw new Error("Max retries exceeded.");
 }
